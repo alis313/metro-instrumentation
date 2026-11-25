@@ -14,7 +14,6 @@ import {
 } from "@/components/ui/dialog";
 import { Train, Plus, Loader2, Image as ImageIcon, Upload, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { uploadToBlob } from "@/lib/blob-upload-client";
 
 interface Station {
   id: string;
@@ -194,18 +193,18 @@ function LayoutImageDialog({
     setUploading(true);
     setError(null);
     try {
-      // Step 1: Upload image to Vercel Blob from the browser
-      const blob = await uploadToBlob(file, "station-layouts", station.code);
+      // Server-side upload: send file as multipart form data
+      // The server uploads to Vercel Blob (production) or local filesystem (dev)
+      const fd = new FormData();
+      fd.append("file", file);
 
-      // Step 2: Send the URL to the server to store in the Station record
       const res = await fetch(`/api/admin/stations/${station.id}/layout-image`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ blobUrl: blob.url }),
+        body: fd,
       });
+      const data = await res.json();
       if (!res.ok) {
-        const d = await res.json();
-        setError(d.error || "خطا در ذخیره");
+        setError(data.error || "خطا در آپلود تصویر");
         return;
       }
       onClose();

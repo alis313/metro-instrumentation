@@ -17,7 +17,7 @@ export interface StoredFile {
 export async function saveFile(
   buffer: Buffer,
   originalName: string,
-  category: "data-sources" | "inclinometers",
+  category: "data-sources" | "inclinometers" | "station-layouts",
   stationCode: string
 ): Promise<StoredFile> {
   const ext = path.extname(originalName);
@@ -25,7 +25,7 @@ export async function saveFile(
   const uniqueName = `${stationCode}_${Date.now()}_${base}${ext}`;
 
   if (IS_PRODUCTION && HAS_BLOB_TOKEN) {
-    // Use Vercel Blob storage
+    // Upload to Vercel Blob from the server
     const blobPath = `${category}/${uniqueName}`;
     const blob = await put(blobPath, buffer, {
       access: "public",
@@ -33,25 +33,32 @@ export async function saveFile(
       contentType: getContentType(ext),
     });
     return {
-      path: blob.url,        // full URL for reading back
-      publicPath: blob.url,  // same URL for serving
+      path: blob.url,
+      publicPath: blob.url,
       size: buffer.length,
     };
   }
 
-  // Dev mode: save to local filesystem
-  const dir = category === "inclinometers"
-    ? path.join(process.cwd(), "public", "inclinometers")
-    : path.join(process.cwd(), "upload", "data-sources");
-  fs.mkdirSync(dir, { recursive: true });
-  const filePath = path.join(dir, uniqueName);
-  fs.writeFileSync(filePath, buffer);
-
-  const publicPath = category === "inclinometers"
-    ? `/inclinometers/${uniqueName}`
-    : filePath; // data-sources are read by the parser, not served directly
-
-  return { path: filePath, publicPath, size: buffer.length };
+  // Dev mode or no Blob token: save to local filesystem
+  if (category === "station-layouts") {
+    const dir = path.join(process.cwd(), "public", "station-layouts");
+    fs.mkdirSync(dir, { recursive: true });
+    const filePath = path.join(dir, uniqueName);
+    fs.writeFileSync(filePath, buffer);
+    return { path: filePath, publicPath: `/station-layouts/${uniqueName}`, size: buffer.length };
+  } else if (category === "inclinometers") {
+    const dir = path.join(process.cwd(), "public", "inclinometers");
+    fs.mkdirSync(dir, { recursive: true });
+    const filePath = path.join(dir, uniqueName);
+    fs.writeFileSync(filePath, buffer);
+    return { path: filePath, publicPath: `/inclinometers/${uniqueName}`, size: buffer.length };
+  } else {
+    const dir = path.join(process.cwd(), "upload", "data-sources");
+    fs.mkdirSync(dir, { recursive: true });
+    const filePath = path.join(dir, uniqueName);
+    fs.writeFileSync(filePath, buffer);
+    return { path: filePath, publicPath: filePath, size: buffer.length };
+  }
 }
 
 // ─── Read a file (for Excel parsing) ─────────────────────────────────

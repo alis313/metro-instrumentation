@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireAdmin, logActivity } from "@/lib/auth";
+import { saveFile } from "@/lib/file-storage";
 
 export const dynamic = "force-dynamic";
 
 // POST /api/admin/stations/[id]/layout-image
-// JSON body: { blobUrl } - the URL of the image already uploaded to Vercel Blob by the client
+// Multipart form: file (the image)
+// The server uploads to Vercel Blob (or local filesystem in dev) and stores the URL
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -13,22 +15,29 @@ export async function POST(
   try {
     const session = await requireAdmin();
     const { id } = await params;
-    const body = await req.json();
-    const { blobUrl } = body as { blobUrl?: string };
-
-    if (!blobUrl) {
-      return NextResponse.json({ error: "آدرس تصویر ارسال نشده است" }, { status: 400 });
-    }
 
     const station = await db.station.findUnique({ where: { id } });
     if (!station) {
       return NextResponse.json({ error: "ایستگاه یافت نشد" }, { status: 404 });
     }
 
+    const formData = await req.formData();
+    const file = formData.get("file");
+
+    if (!file || !(file instanceof File)) {
+      return NextResponse.json({ error: "فایل تصویر ارسال نشده است" }, { status: 400 });
+    }
+
+    const bytes = await file.arrayBuffer();
+    const buffer = Buffer.from(bytes);
+
+    // Upload to Vercel Blob (production) or local filesystem (dev)
+    const stored = await saveFile(buffer, file.name, "station-layouts", station.code);
+
     const updated = await db.station.update({
       where: { id },
       data: {
-        layoutImagePath: blobUrl,
+        layoutImagePath: stored.publicPath,
         layoutImageUploadedAt: new Date(),
       },
     });
@@ -40,17 +49,20 @@ export async function POST(
       action: "UPLOAD_STATION_LAYOUT",
       resourceType: "station",
       resourceId: id,
-      details: { stationCode: station.code, imageUrl: blobUrl },
+      details: { stationCode: station.code, imageUrl: stored.publicPath, fileName: file.name },
       ip: forwarded ? forwarded.split(",")[0].trim() : "unknown",
     });
 
-    return NextResponse.json({ station: updated });
+    return NextResponse.json({ station: updated, imageUrl: stored.publicPath });
   } catch (err) {
     if (err instanceof Error && (err.message === "UNAUTHORIZED" || err.message === "FORBIDDEN")) {
       return NextResponse.json({ error: "دسترسی غیرمجاز" }, { status: 403 });
     }
     console.error("[admin/stations/[id]/layout-image] POST error:", err);
-    return NextResponse.json({ error: "خطای سرور" }, { status: 500 });
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "خطای سرور" },
+      { status: 500 }
+    );
   }
 }
 
