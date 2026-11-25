@@ -1,10 +1,10 @@
 "use client";
 
 import * as React from "react";
-import { Moon, Sun, Bell, Search, Download, Train } from "lucide-react";
+import { Moon, Sun, Bell, Download, Train, ShieldCheck, LogOut } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { useAuth } from "@/components/auth-provider";
 
 interface HeaderProps {
   activeAlerts: number;
@@ -17,6 +17,7 @@ export function DashboardHeader({
 }: HeaderProps) {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = React.useState(false);
+  const { user, logout } = useAuth();
   React.useEffect(() => setMounted(true), []);
 
   return (
@@ -42,17 +43,8 @@ export function DashboardHeader({
           </div>
         </div>
 
-        {/* Search (desktop) */}
-        <div className="hidden flex-1 items-center justify-center md:flex">
-          <div className="relative w-full max-w-md">
-            <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="جستجوی ایستگاه، ابزار یا کد..."
-              className="border-border/50 bg-card/50 pr-9 backdrop-blur"
-              aria-label="جستجو"
-            />
-          </div>
-        </div>
+        {/* Spacer (search bar removed) */}
+        <div className="flex-1" />
 
         {/* Actions */}
         <div className="ms-auto flex items-center gap-2">
@@ -66,6 +58,20 @@ export function DashboardHeader({
               پایش زنده
             </span>
           </div>
+
+          {/* Admin panel button - only visible to admins */}
+          {user?.role === "ADMIN" && (
+            <a href="/admin">
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5 border-border/50 bg-card/50 backdrop-blur"
+              >
+                <ShieldCheck className="h-4 w-4" />
+                <span className="hidden sm:inline">پنل مدیریت</span>
+              </Button>
+            </a>
+          )}
 
           {/* Alerts */}
           <Button
@@ -84,14 +90,23 @@ export function DashboardHeader({
             )}
           </Button>
 
-          <Button
-            variant="outline"
-            size="sm"
-            className="hidden gap-1.5 border-border/50 bg-card/50 backdrop-blur sm:flex"
-          >
-            <Download className="h-4 w-4" />
-            <span>خروجی</span>
-          </Button>
+          {/* User menu / logout */}
+          {user && (
+            <div className="flex items-center gap-2">
+              <span className="hidden text-xs text-muted-foreground sm:inline">
+                {user.displayName}
+              </span>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={logout}
+                className="border-border/50 bg-card/50 backdrop-blur"
+                aria-label="خروج"
+              >
+                <LogOut className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
 
           <Button
             variant="outline"
