@@ -18,6 +18,7 @@ import {
   FileSpreadsheet, Upload, Loader2, ArrowLeft, ArrowRight, Save, Wand2,
 } from "lucide-react";
 import Link from "next/link";
+import { uploadToBlob } from "@/lib/blob-upload-client";
 
 interface Station {
   id: string;
@@ -102,17 +103,55 @@ export default function NewDataSourcePage() {
     setUploading(true);
     setError(null);
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      fd.append("stationId", stationId);
-      const res = await fetch("/api/admin/data-sources/upload", { method: "POST", body: fd });
+      // Step 1a: Upload file directly to Vercel Blob from the browser
+      // This bypasses the serverless function 4.5MB body size limit
+      const station = stations.find((s) => s.id === stationId);
+      const stationCode = station?.code || "STA";
+      let blobUrl = "";
+      let fileSize = file.size;
+
+      try {
+        const blob = await uploadToBlob(file, "data-sources", stationCode);
+        blobUrl = blob.url;
+      } catch (blobErr) {
+        // Fallback: if Blob upload fails (e.g., in dev without token),
+        // fall back to server-side multipart upload
+        console.warn("[upload] Blob client upload failed, falling back to server:", blobErr);
+        const fd = new FormData();
+        fd.append("file", file);
+        fd.append("stationId", stationId);
+        const fallbackRes = await fetch("/api/admin/data-sources/upload", { method: "POST", body: fd });
+        const fallbackData = await fallbackRes.json();
+        if (!fallbackRes.ok) {
+          setError(fallbackData.error || "خطا در آپلود فایل");
+          return;
+        }
+        setDataSourceId(fallbackData.dataSource.id);
+        setStep(2);
+        return;
+      }
+
+      // Step 1b: Send the Blob URL to the server to store metadata in DB
+      const res = await fetch("/api/admin/data-sources/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          stationId,
+          blobUrl,
+          fileName: file.name,
+          fileSize,
+        }),
+      });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error || "خطا در آپلود");
+        setError(data.error || "خطا در ذخیره اطلاعات فایل");
         return;
       }
       setDataSourceId(data.dataSource.id);
       setStep(2);
+    } catch (err) {
+      console.error("[upload] error:", err);
+      setError("خطا در آپلود فایل: " + String(err));
     } finally {
       setUploading(false);
     }

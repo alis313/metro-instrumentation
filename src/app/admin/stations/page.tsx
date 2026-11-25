@@ -12,14 +12,16 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
-import { Train, Plus, Loader2 } from "lucide-react";
+import { Train, Plus, Loader2, Image as ImageIcon, Upload, Trash2 } from "lucide-react";
 import Link from "next/link";
+import { uploadToBlob } from "@/lib/blob-upload-client";
 
 interface Station {
   id: string;
   name: string;
   code: string;
   createdAt: string;
+  layoutImagePath: string | null;
   _count: { dataSources: number; inclinometerImages: number; userAccess: number };
 }
 
@@ -32,6 +34,7 @@ export default function AdminStationsPage() {
   const [code, setCode] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
   const [saving, setSaving] = React.useState(false);
+  const [layoutStation, setLayoutStation] = React.useState<Station | null>(null);
 
   async function load() {
     setLoading(true);
@@ -104,10 +107,11 @@ export default function AdminStationsPage() {
                   <TableRow>
                     <TableHead>نام</TableHead>
                     <TableHead>کد</TableHead>
+                    <TableHead>تصویر جانمایی</TableHead>
                     <TableHead>منابع داده</TableHead>
                     <TableHead>اینکلاینومتر</TableHead>
-                    <TableHead>کاربران با دسترسی</TableHead>
-                    <TableHead>تاریخ ایجاد</TableHead>
+                    <TableHead>کاربران</TableHead>
+                    <TableHead className="text-left">عملیات</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -115,10 +119,21 @@ export default function AdminStationsPage() {
                     <TableRow key={s.id}>
                       <TableCell>{s.name}</TableCell>
                       <TableCell><code className="font-mono font-semibold">{s.code}</code></TableCell>
+                      <TableCell>
+                        {s.layoutImagePath ? (
+                          <span className="text-xs text-emerald-600">آپلود شده</span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">ندارد</span>
+                        )}
+                      </TableCell>
                       <TableCell>{s._count.dataSources}</TableCell>
                       <TableCell>{s._count.inclinometerImages}</TableCell>
                       <TableCell>{s._count.userAccess}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{new Date(s.createdAt).toLocaleDateString("fa-IR")}</TableCell>
+                      <TableCell>
+                        <Button size="sm" variant="outline" onClick={() => setLayoutStation(s)} className="gap-1.5">
+                          <ImageIcon className="h-3.5 w-3.5" /> تصویر جانمایی
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -128,6 +143,7 @@ export default function AdminStationsPage() {
         </Card>
       </div>
 
+      {/* Create station dialog */}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>ایستگاه جدید</DialogTitle></DialogHeader>
@@ -149,6 +165,117 @@ export default function AdminStationsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Layout image upload dialog */}
+      {layoutStation && (
+        <LayoutImageDialog
+          station={layoutStation}
+          onClose={() => { setLayoutStation(null); load(); }}
+        />
+      )}
     </div>
+  );
+}
+
+// ─── Layout image upload dialog ──────────────────────────────────────
+
+function LayoutImageDialog({
+  station, onClose,
+}: {
+  station: Station;
+  onClose: () => void;
+}) {
+  const [file, setFile] = React.useState<File | null>(null);
+  const [uploading, setUploading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  async function upload() {
+    if (!file) return;
+    setUploading(true);
+    setError(null);
+    try {
+      // Step 1: Upload image to Vercel Blob from the browser
+      const blob = await uploadToBlob(file, "station-layouts", station.code);
+
+      // Step 2: Send the URL to the server to store in the Station record
+      const res = await fetch(`/api/admin/stations/${station.id}/layout-image`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ blobUrl: blob.url }),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        setError(d.error || "خطا در ذخیره");
+        return;
+      }
+      onClose();
+    } catch (err) {
+      setError("خطا در آپلود: " + String(err));
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function remove() {
+    if (!confirm("تصویر جانمایی حذف شود؟")) return;
+    setUploading(true);
+    try {
+      await fetch(`/api/admin/stations/${station.id}/layout-image`, { method: "DELETE" });
+      onClose();
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>تصویر جانمایی ابزار — {station.name}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          {/* Current image */}
+          {station.layoutImagePath && (
+            <div className="space-y-2">
+              <Label>تصویر فعلی:</Label>
+              <div className="overflow-hidden rounded-md border">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={station.layoutImagePath} alt="جانمایی ابزار" className="w-full" />
+              </div>
+              <Button variant="outline" size="sm" onClick={remove} disabled={uploading} className="gap-1.5">
+                <Trash2 className="h-3.5 w-3.5" /> حذف تصویر فعلی
+              </Button>
+            </div>
+          )}
+
+          {/* Upload new image */}
+          <div className="space-y-2">
+            <Label>{station.layoutImagePath ? "تصویر جدید:" : "فایل تصویر:"}</Label>
+            <Input
+              type="file"
+              accept="image/*"
+              onChange={(e) => setFile(e.target.files?.[0] || null)}
+            />
+            {file && <p className="text-xs text-muted-foreground">{file.name} ({Math.round(file.size / 1024)} KB)</p>}
+            <p className="text-xs text-muted-foreground">
+              عکس نقشه جانمایی ابزارهای دقیق این ایستگاه را آپلود کنید. این تصویر در تب «تصویر جانمایی» در داشبورد نمایش داده می‌شود.
+            </p>
+          </div>
+
+          {error && (
+            <div className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-500">
+              {error}
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>انصراف</Button>
+          <Button onClick={upload} disabled={!file || uploading} className="gap-2">
+            {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+            آپلود تصویر
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

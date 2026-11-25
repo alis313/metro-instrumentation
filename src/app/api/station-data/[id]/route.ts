@@ -46,7 +46,13 @@ export async function GET(
     });
 
     return NextResponse.json({
-      station: { id: station.id, name: station.name, code: station.code },
+      station: {
+        id: station.id,
+        name: station.name,
+        code: station.code,
+        layoutImagePath: station.layoutImagePath,
+        layoutImageUploadedAt: station.layoutImageUploadedAt,
+      },
       ...data,
     });
   } catch (err) {

@@ -8,6 +8,10 @@ import { MetroLineSchematic } from "@/components/dashboard/metro-line-schematic"
 import { StationSelector } from "@/components/dashboard/station-selector";
 import { InstrumentMap } from "@/components/dashboard/instrument-map";
 import { InstrumentTabs } from "@/components/dashboard/instrument-tabs";
+import { LayoutImageView } from "@/components/dashboard/layout-image-view";
+import { DataTableView } from "@/components/dashboard/data-table-view";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { BarChart3, Image as ImageIcon, Table as TableIcon } from "lucide-react";
 import { AlertsSheet } from "@/components/dashboard/alerts-sheet";
 import { DashboardFooter } from "@/components/dashboard/dashboard-footer";
 import {
@@ -583,21 +587,55 @@ function DashboardInner({ user, onLogout }: { user: NonNullable<ReturnType<typeo
           </div>
         </section>
 
-        {/* Map + tabs */}
-        <section className="mt-4 space-y-4">
-          <InstrumentMap
-            stationName={station.name}
-            stationCode={station.code}
-            instruments={instruments}
-            selectedId={selectedInstrumentId}
-            onSelect={setSelectedInstrumentId}
-          />
+        {/* Three-tab view: charts, layout image, data table */}
+        <section className="mt-4">
+          <Tabs defaultValue="charts" className="w-full">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="charts" className="gap-1.5">
+                <BarChart3 className="h-4 w-4" />
+                <span>نمایش داده</span>
+              </TabsTrigger>
+              <TabsTrigger value="layout" className="gap-1.5">
+                <ImageIcon className="h-4 w-4" />
+                <span>تصویر جانمایی</span>
+              </TabsTrigger>
+              <TabsTrigger value="table" className="gap-1.5">
+                <TableIcon className="h-4 w-4" />
+                <span>نمایش جدول</span>
+              </TabsTrigger>
+            </TabsList>
 
-          <InstrumentTabs
-            instruments={instruments}
-            selectedId={selectedInstrumentId}
-            onSelect={setSelectedInstrumentId}
-          />
+            {/* Tab 1: Charts */}
+            <TabsContent value="charts" className="mt-4 space-y-4">
+              <InstrumentMap
+                stationName={station.name}
+                stationCode={station.code}
+                instruments={instruments}
+                selectedId={selectedInstrumentId}
+                onSelect={setSelectedInstrumentId}
+              />
+              <InstrumentTabs
+                instruments={instruments}
+                selectedId={selectedInstrumentId}
+                onSelect={setSelectedInstrumentId}
+              />
+            </TabsContent>
+
+            {/* Tab 2: Layout image */}
+            <TabsContent value="layout" className="mt-4">
+              <LayoutImageView
+                layoutImagePath={(stationData as { station?: { layoutImagePath?: string; layoutImageUploadedAt?: string } })?.station?.layoutImagePath ?? null}
+                layoutImageUploadedAt={(stationData as { station?: { layoutImageUploadedAt?: string } })?.station?.layoutImageUploadedAt ?? null}
+                stationName={station.name}
+                isAdmin={user.role === "ADMIN"}
+              />
+            </TabsContent>
+
+            {/* Tab 3: Data table */}
+            <TabsContent value="table" className="mt-4">
+              <DataTableView instruments={instruments} />
+            </TabsContent>
+          </Tabs>
         </section>
 
         {/* Project info cards */}

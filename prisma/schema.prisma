@@ -35,11 +35,13 @@ model User {
 }
 
 model Station {
-  id        String   @id @default(cuid())
-  name      String
-  code      String   @unique // e.g. "A3", "N3", "Link"
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String   @id @default(cuid())
+  name           String
+  code           String   @unique // e.g. "A3", "N3", "Link"
+  layoutImagePath String?  // URL of the instrument placement image (uploaded by admin)
+  layoutImageUploadedAt DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   // Relations
   userAccess        UserStationAccess[]
