@@ -605,15 +605,8 @@ function DashboardInner({ user, onLogout }: { user: NonNullable<ReturnType<typeo
               </TabsTrigger>
             </TabsList>
 
-            {/* Tab 1: Charts */}
-            <TabsContent value="charts" className="mt-4 space-y-4">
-              <InstrumentMap
-                stationName={station.name}
-                stationCode={station.code}
-                instruments={instruments}
-                selectedId={selectedInstrumentId}
-                onSelect={setSelectedInstrumentId}
-              />
+            {/* Tab 1: Charts - instrument tabs only (map removed) */}
+            <TabsContent value="charts" className="mt-4">
               <InstrumentTabs
                 instruments={instruments}
                 selectedId={selectedInstrumentId}

@@ -31,3 +31,10 @@ export async function uploadToBlob(
     size: file.size,
   };
 }
+
+// Check if Vercel Blob is configured (has a token)
+// Used by the UI to decide whether to use client-side upload or server-side fallback
+export function isBlobConfigured(): boolean {
+  return process.env.NODE_ENV === "production" && !!process.env.BLOB_READ_WRITE_TOKEN;
+}
+
